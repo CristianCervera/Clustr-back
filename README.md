@@ -60,3 +60,9 @@ Todas cuelgan de `/api`. 🔒 = requiere `Authorization: Bearer <token>`.
 | POST 🔒 | `/groups/generate` | `{ preferences, personIds? }` → `{ groups }` (no guarda; guarda las preferencias) |
 | GET/POST 🔒 | `/group-sets` | Repartos guardados · guardar `{ name, preferences, groups: id[][] }` |
 | GET/PATCH/DELETE 🔒 | `/group-sets/:id` | Ver · renombrar `{ name }` · borrar |
+
+## Despliegue (Render)
+
+`render.yaml` describe la API como Web Service gratuito en Frankfurt. En Render: **New → Blueprint** y elige este
+repositorio. Pide tres valores: `MONGODB_URI` (MongoDB Atlas), `CORS_ORIGIN` (dirección del front) y
+`GOOGLE_CLIENT_ID`. `JWT_SECRET` lo genera Render. Cada push a `main` vuelve a desplegar.

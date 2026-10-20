@@ -1,0 +1,32 @@
+# Receta de despliegue para Render (New → Blueprint). Crea la API como Web Service gratuito.
+services:
+  - type: web
+    name: clustr-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    # Las dependencias de desarrollo hacen falta para compilar TypeScript. MONGOMS_DISABLE_POSTINSTALL
+    # evita descargar el MongoDB de pruebas, que en producción no se usa.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: MONGOMS_DISABLE_POSTINSTALL
+        value: "1"
+      # Clave de las sesiones: Render la genera sola y no cambia entre despliegues.
+      - key: JWT_SECRET
+        generateValue: true
+      # Cadena de conexión de MongoDB Atlas (mongodb+srv://…). Se pide al crear el servicio.
+      - key: MONGODB_URI
+        sync: false
+      # Dirección del front, p. ej. https://clustr.onrender.com (varias separadas por coma).
+      - key: CORS_ORIGIN
+        sync: false
+      # ID de cliente OAuth de Google, el mismo que VITE_GOOGLE_CLIENT_ID en el front.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
