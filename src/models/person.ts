@@ -14,6 +14,8 @@ const personSchema = new Schema(
     phone: { type: String, default: '', trim: true, maxlength: 40 },
     email: { type: String, default: '', trim: true, lowercase: true, maxlength: 120 },
     notes: { type: String, default: '', trim: true, maxlength: 500 },
+    /** No suele venir: se reparte entre los grupos para que ninguno se quede cojo. */
+    occasional: { type: Boolean, default: false },
     /** Si participa al generar grupos. */
     active: { type: Boolean, default: true },
   },

@@ -51,6 +51,7 @@ export interface PersonDto {
   gender: 'male' | 'female' | null;
   age: number | null;
   married: boolean;
+  occasional: boolean;
   spouseId: string | null;
   phone: string;
   email: string;
@@ -65,6 +66,7 @@ export function personDto(p: {
   gender?: string | null;
   age?: number | null;
   married?: boolean | null;
+  occasional?: boolean | null;
   spouse?: Id | null;
   phone?: string | null;
   email?: string | null;
@@ -78,6 +80,7 @@ export function personDto(p: {
     gender: (p.gender as PersonDto['gender']) ?? null,
     age: p.age ?? null,
     married: Boolean(p.married),
+    occasional: Boolean(p.occasional),
     spouseId: p.spouse ? p.spouse.toString() : null,
     phone: p.phone ?? '',
     email: p.email ?? '',
@@ -93,6 +96,7 @@ export interface MemberDto {
   gender: string | null;
   age: number | null;
   married: boolean;
+  occasional: boolean;
   spouseId: string | null;
 }
 
@@ -100,7 +104,7 @@ export function groupSetDto(set: {
   _id: Id;
   name: string;
   preferences?: unknown;
-  groups: { members: { person?: Id | null; firstName: string; lastName?: string | null; gender?: string | null; age?: number | null; married?: boolean | null; spouse?: Id | null }[] }[];
+  groups: { members: { person?: Id | null; firstName: string; lastName?: string | null; gender?: string | null; age?: number | null; married?: boolean | null; occasional?: boolean | null; spouse?: Id | null }[] }[];
   createdAt?: Date;
 }) {
   return {
@@ -117,6 +121,7 @@ export function groupSetDto(set: {
           gender: m.gender ?? null,
           age: m.age ?? null,
           married: Boolean(m.married),
+          occasional: Boolean(m.occasional),
           spouseId: m.spouse ? m.spouse.toString() : null,
         }),
       ),

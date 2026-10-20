@@ -108,13 +108,17 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/auth/me/stats', { preHandler: app.authenticate }, async (request) => {
     const owner = request.viewerId;
-    const [people, married, active, groupSets] = await Promise.all([
+    const [people, married, linked, occasional, active, groupSets] = await Promise.all([
       Person.countDocuments({ owner }),
       Person.countDocuments({ owner, married: true }),
+      Person.countDocuments({ owner, spouse: { $ne: null } }),
+      Person.countDocuments({ owner, occasional: true }),
       Person.countDocuments({ owner, active: true }),
       GroupSet.countDocuments({ owner }),
     ]);
-    return { people, married, active, groupSets };
+    // Un matrimonio vinculado son dos personas; quien está casado sin su pareja en la lista cuenta como uno.
+    const couples = linked / 2 + (married - linked);
+    return { people, married, couples, occasional, active, groupSets };
   });
 
   app.put('/auth/me/password', { preHandler: app.authenticate, schema: { body: ChangePassword } }, async (request, reply) => {

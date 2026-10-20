@@ -40,6 +40,7 @@ export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
         gender: p.gender as Gender | null,
         age: p.age,
         married: p.married,
+        occasional: p.occasional,
         spouseId: p.spouse?.toString() ?? null,
       })),
       preferences,
@@ -75,7 +76,7 @@ export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
       groups: groups.map((group) => ({
         members: group.map((id) => {
           const p = people.get(id)!;
-          return { person: p._id, firstName: p.firstName, lastName: p.lastName, gender: p.gender, age: p.age, married: p.married, spouse: p.spouse };
+          return { person: p._id, firstName: p.firstName, lastName: p.lastName, gender: p.gender, age: p.age, married: p.married, occasional: p.occasional, spouse: p.spouse };
         }),
       })),
     });

@@ -65,6 +65,16 @@ describe('makeGroups', () => {
     for (const g of groups) expect(g.filter((id) => !id.startsWith('s'))).toHaveLength(4);
   });
 
+  it('reparte a los ocasionales para que no coincidan en el mismo grupo', () => {
+    // 4 ocasionales entre 24 personas y 4 grupos: uno en cada grupo.
+    const occasional = new Set(['s0', 's1', 's2', 's3']);
+    const people = sampleCrowd().map((p) => ({ ...p, occasional: occasional.has(p.id) }));
+    for (let seed = 10; seed < 15; seed++) {
+      const groups = makeGroups(people, prefs({ value: 4, spreadOccasional: true }), seededRandom(seed));
+      for (const g of groups) expect(g.filter((id) => occasional.has(id))).toHaveLength(1);
+    }
+  });
+
   it('nunca crea grupos vacíos ni más grupos que personas', () => {
     const people = sampleCrowd().slice(0, 3);
     expect(makeGroups(people, prefs({ value: 10 }), seededRandom(8))).toHaveLength(3);

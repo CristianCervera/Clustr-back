@@ -98,7 +98,7 @@ describe('personas', () => {
           { firstName: 'Lucía', lastName: 'Martín', gender: 'female', married: true, spouseName: 'Luis Garcia' },
           // Solo el nombre basta si no hay otra Sara.
           { firstName: 'Pedro', gender: 'male', married: true, spouseName: 'Sara' },
-          { firstName: 'Sara', lastName: 'Ruiz', gender: 'female' },
+          { firstName: 'Sara', lastName: 'Ruiz', gender: 'female', occasional: true },
           // Marta no tiene fila propia: se añade a la lista.
           { firstName: 'Tomás', gender: 'male', married: true, spouseName: 'Marta Gil Soto' },
         ],
@@ -111,7 +111,8 @@ describe('personas', () => {
     const byName = (name: string) => body.people.find((p: { firstName: string }) => p.firstName === name);
     expect(byName('Luis').spouseId).toBe(byName('Lucía').id);
     expect(byName('Pedro').spouseId).toBe(byName('Sara').id);
-    expect(byName('Sara')).toMatchObject({ married: true, spouseId: byName('Pedro').id });
+    expect(byName('Sara')).toMatchObject({ married: true, occasional: true, spouseId: byName('Pedro').id });
+    expect(byName('Luis').occasional).toBe(false);
     expect(byName('Marta')).toMatchObject({ lastName: 'Gil Soto', married: true, spouseId: byName('Tomás').id });
   });
 });
@@ -140,12 +141,15 @@ describe('grupos', () => {
     expect(save.statusCode).toBe(201);
     const set = save.json();
     expect(set.groups.flat()).toHaveLength(6);
+    // La copia guardada conserva la asistencia de cada persona.
+    expect(set.groups.flat().find((m: { firstName: string }) => m.firstName === 'Sara').occasional).toBe(true);
 
     const list = await app.inject({ method: 'GET', url: '/api/group-sets', headers: auth() });
     expect(list.json()).toHaveLength(1);
 
     const stats = await app.inject({ method: 'GET', url: '/api/auth/me/stats', headers: auth() });
-    expect(stats.json()).toMatchObject({ people: 6, groupSets: 1 });
+    // 6 casados forman 3 matrimonios.
+    expect(stats.json()).toMatchObject({ people: 6, married: 6, couples: 3, occasional: 1, groupSets: 1 });
 
     expect((await app.inject({ method: 'DELETE', url: `/api/group-sets/${set.id}`, headers: auth() })).statusCode).toBe(204);
   });

@@ -9,6 +9,7 @@ const memberSchema = new Schema(
     gender: { type: String, default: null },
     age: { type: Number, default: null },
     married: { type: Boolean, default: false },
+    occasional: { type: Boolean, default: false },
     spouse: { type: Schema.Types.ObjectId, default: null },
   },
   { _id: false },

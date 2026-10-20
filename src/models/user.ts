@@ -12,6 +12,7 @@ const preferencesSchema = new Schema(
     balanceGender: { type: Boolean, default: true },
     balanceAge: { type: Boolean, default: false },
     mixMarital: { type: Boolean, default: true },
+    spreadOccasional: { type: Boolean, default: true },
   },
   { _id: false },
 );

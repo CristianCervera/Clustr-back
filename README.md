@@ -36,7 +36,8 @@ cuenta con ese email, se vincula. Sin `GOOGLE_CLIENT_ID` la ruta responde `503`.
 3. Una búsqueda local intercambia y mueve piezas entre grupos mientras el coste baje.
 
 El coste penaliza, por orden de peso: separarse del tamaño objetivo, desviarse de la proporción global de
-hombres/mujeres y de casados/solteros, y de la edad media. Con «separados», tener a un matrimonio en el mismo grupo.
+hombres/mujeres, de casados/solteros y de ocasionales (quienes no suelen venir, con más peso para que ningún
+grupo se quede cojo), y de la edad media. Con «separados», tener a un matrimonio en el mismo grupo.
 
 ## Endpoints
 
@@ -48,7 +49,7 @@ Todas cuelgan de `/api`. 🔒 = requiere `Authorization: Bearer <token>`.
 | POST | `/auth/login` | `{ email, password }` → `{ token, user }` |
 | POST | `/auth/google` | `{ credential, locale? }` (ID token de Google) → `{ token, user }` |
 | GET/PATCH 🔒 | `/auth/me` | Perfil. PATCH: `{ name?, locale?, theme?, preferences? }` |
-| GET 🔒 | `/auth/me/stats` | `{ people, married, active, groupSets }` |
+| GET 🔒 | `/auth/me/stats` | `{ people, married, couples, occasional, active, groupSets }` (`couples`: matrimonios, no personas casadas) |
 | PUT 🔒 | `/auth/me/password` | `{ currentPassword?, newPassword }` (sin la actual si la cuenta es solo de Google) |
 | DELETE 🔒 | `/auth/me` | Borra la cuenta con sus personas y repartos |
 | GET 🔒 | `/people` | Lista ordenada por nombre |

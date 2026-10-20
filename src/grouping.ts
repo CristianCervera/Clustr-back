@@ -15,6 +15,8 @@ export const GroupPreferences = z.object({
   balanceAge: z.boolean().default(false),
   /** Repartir solteros y casados de forma proporcional entre los grupos. */
   mixMarital: z.boolean().default(true),
+  /** Repartir a los ocasionales (quienes no suelen venir) para que ningún grupo dependa de ellos. */
+  spreadOccasional: z.boolean().default(true),
 });
 export type GroupPreferences = z.infer<typeof GroupPreferences>;
 
@@ -25,6 +27,8 @@ export interface GroupingPerson {
   gender?: Gender | null;
   age?: number | null;
   married: boolean;
+  /** No suele venir. */
+  occasional?: boolean;
   /** Solo cuenta si el cónyuge también está entre las personas a repartir. */
   spouseId?: string | null;
 }
@@ -34,6 +38,7 @@ type Unit = GroupingPerson[];
 interface Stats {
   maleShare: number;
   marriedShare: number;
+  occasionalShare: number;
   ageMean: number;
   ageStd: number;
 }
@@ -74,6 +79,7 @@ function statsOf(people: GroupingPerson[]): Stats {
   return {
     maleShare: gendered.length ? gendered.filter((p) => p.gender === 'male').length / gendered.length : 0,
     marriedShare: people.length ? people.filter((p) => p.married).length / people.length : 0,
+    occasionalShare: people.length ? people.filter((p) => p.occasional).length / people.length : 0,
     ageMean,
     ageStd: Math.sqrt(variance),
   };
@@ -81,7 +87,7 @@ function statsOf(people: GroupingPerson[]): Stats {
 
 /**
  * Coste de un grupo: cuanto más se aleja de su tamaño objetivo y de las proporciones globales
- * (sexo, estado civil, edad), más alto. Los pesos priorizan el tamaño sobre el equilibrio.
+ * (sexo, estado civil, ocasionales, edad), más alto. Los pesos priorizan el tamaño sobre el equilibrio.
  */
 function groupCost(members: GroupingPerson[], target: number, prefs: GroupPreferences, stats: Stats): number {
   let cost = 50 * (members.length - target) ** 2;
@@ -94,6 +100,11 @@ function groupCost(members: GroupingPerson[], target: number, prefs: GroupPrefer
   if (prefs.mixMarital) {
     const married = members.filter((p) => p.married).length;
     cost += 3 * (married - stats.marriedShare * members.length) ** 2;
+  }
+  if (prefs.spreadOccasional) {
+    // Más peso que el resto de equilibrios: un grupo con varios ocasionales se queda cojo.
+    const occasional = members.filter((p) => p.occasional).length;
+    cost += 6 * (occasional - stats.occasionalShare * members.length) ** 2;
   }
   if (prefs.balanceAge && stats.ageStd > 0) {
     const ages = members.map((p) => p.age).filter((a): a is number => typeof a === 'number');
