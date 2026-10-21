@@ -104,7 +104,7 @@ export function groupSetDto(set: {
   _id: Id;
   name: string;
   preferences?: unknown;
-  groups: { members: { person?: Id | null; firstName: string; lastName?: string | null; gender?: string | null; age?: number | null; married?: boolean | null; occasional?: boolean | null; spouse?: Id | null }[] }[];
+  groups: { name?: string | null; members: { person?: Id | null; firstName: string; lastName?: string | null; gender?: string | null; age?: number | null; married?: boolean | null; occasional?: boolean | null; spouse?: Id | null }[] }[];
   createdAt?: Date;
 }) {
   return {
@@ -112,6 +112,8 @@ export function groupSetDto(set: {
     name: set.name,
     preferences: set.preferences ?? {},
     createdAt: (set.createdAt ?? new Date()).toISOString(),
+    /** Nombre de cada grupo, en el mismo orden que `groups`; vacío si no se ha puesto. */
+    groupNames: set.groups.map((g) => g.name ?? ''),
     groups: set.groups.map((g) =>
       g.members.map(
         (m): MemberDto => ({

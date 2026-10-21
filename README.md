@@ -59,8 +59,8 @@ Todas cuelgan de `/api`. 🔒 = requiere `Authorization: Bearer <token>`.
 | POST 🔒 | `/people/active` | `{ ids, active }`: quién participa en los grupos |
 | POST 🔒 | `/people/import` | `{ people: [...], replace }`. Vincula siempre a los cónyuges por `spouseName`; si no existe, lo crea |
 | POST 🔒 | `/groups/generate` | `{ preferences, personIds? }` → `{ groups }` (no guarda; guarda las preferencias) |
-| GET/POST 🔒 | `/group-sets` | Repartos guardados · guardar `{ name, preferences, groups: id[][] }` |
-| GET/PATCH/DELETE 🔒 | `/group-sets/:id` | Ver · renombrar `{ name }` · borrar |
+| GET/POST 🔒 | `/group-sets` | Repartos guardados · guardar `{ name, preferences, groups: id[][], groupNames? }`. Devuelven `groupNames` (vacío: «Grupo N») |
+| GET/PATCH/DELETE 🔒 | `/group-sets/:id` | Ver · cambiar `{ name?, groupNames?, layout? }` · borrar. `layout`: posiciones de los miembros actuales en cada grupo |
 
 ## Despliegue (Render)
 

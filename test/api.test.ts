@@ -147,10 +147,35 @@ describe('grupos', () => {
       method: 'POST',
       url: '/api/group-sets',
       headers: auth(),
-      payload: { name: 'Retiro', preferences: { mode: 'count', value: 2 }, groups: groups.map((g) => g.map((p) => p.id)) },
+      payload: { name: 'Retiro', preferences: { mode: 'count', value: 2 }, groups: groups.map((g) => g.map((p) => p.id)), groupNames: ['Los leones', ''] },
     });
     expect(save.statusCode).toBe(201);
     const set = save.json();
+    expect(set.groupNames).toEqual(['Los leones', '']);
+
+    // Los nombres de los grupos se pueden cambiar después, con o sin el del reparto.
+    const renamed = await app.inject({ method: 'PATCH', url: `/api/group-sets/${set.id}`, headers: auth(), payload: { groupNames: ['', 'Las águilas'] } });
+    expect(renamed.json()).toMatchObject({ name: 'Retiro', groupNames: ['', 'Las águilas'] });
+    expect(renamed.json().groups.flat()).toHaveLength(6);
+    const wrong = await app.inject({ method: 'PATCH', url: `/api/group-sets/${set.id}`, headers: auth(), payload: { groupNames: ['Solo uno'] } });
+    expect(wrong.statusCode).toBe(400);
+
+    // Mover al primer miembro del grupo 1 al grupo 2: la composición se da por posiciones.
+    const sizes = set.groups.map((g: unknown[]) => g.length);
+    const first = Array.from({ length: sizes[0] }, (_, i) => i);
+    const second = Array.from({ length: sizes[1] }, (_, i) => sizes[0] + i);
+    const moved = await app.inject({
+      method: 'PATCH',
+      url: `/api/group-sets/${set.id}`,
+      headers: auth(),
+      payload: { layout: [first.slice(1), [...second, first[0]]] },
+    });
+    expect(moved.statusCode).toBe(200);
+    expect(moved.json().groups.map((g: unknown[]) => g.length)).toEqual([sizes[0] - 1, sizes[1] + 1]);
+    expect(moved.json().groups[1].at(-1)).toEqual(set.groups[0][0]);
+    expect(moved.json().groupNames).toEqual(['', 'Las águilas']);
+    const dup = await app.inject({ method: 'PATCH', url: `/api/group-sets/${set.id}`, headers: auth(), payload: { layout: [[0, 0]] } });
+    expect(dup.statusCode).toBe(400);
     expect(set.groups.flat()).toHaveLength(6);
     // La copia guardada conserva la asistencia de cada persona.
     expect(set.groups.flat().find((m: { firstName: string }) => m.firstName === 'Sara').occasional).toBe(true);

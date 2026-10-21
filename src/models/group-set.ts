@@ -20,7 +20,16 @@ const groupSetSchema = new Schema(
     owner: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     name: { type: String, required: true, trim: true, maxlength: 80 },
     preferences: { type: Schema.Types.Mixed, default: {} },
-    groups: { type: [{ members: { type: [memberSchema], default: [] } }], default: [] },
+    groups: {
+      type: [
+        {
+          /** Nombre puesto a mano; vacío, se muestra «Grupo N». */
+          name: { type: String, default: '', trim: true, maxlength: 40 },
+          members: { type: [memberSchema], default: [] },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );
