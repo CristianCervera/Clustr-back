@@ -1,5 +1,10 @@
 # Novedades
 
+## 0.7.0
+
+- **Corrige: «Un responsable en cada grupo» no se recordaba.** La preferencia `leaders` no estaba en el esquema de las
+  preferencias del usuario y Mongoose la descartaba al guardar; ahora se guarda en la cuenta.
+
 ## 0.6.0
 
 - **Responsables al crear.** `POST /group-sets` acepta `heads`, las personas que encabezan su grupo; la preferencia

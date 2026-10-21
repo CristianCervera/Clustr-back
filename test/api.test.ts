@@ -295,6 +295,13 @@ describe('grupos', () => {
     await app.inject({ method: 'DELETE', url: `/api/group-sets/${set.id}`, headers: auth() });
   });
 
+  it('recuerda en la cuenta si se quiere un responsable en cada grupo', async () => {
+    const preferences = { mode: 'count', value: 2, couples: 'together', balanceGender: true, balanceAge: false, mixMarital: true, spreadOccasional: true, leaders: true };
+    expect((await app.inject({ method: 'POST', url: '/api/groups/generate', headers: auth(), payload: { preferences } })).statusCode).toBe(200);
+    const me = (await app.inject({ method: 'GET', url: '/api/auth/me', headers: auth() })).json();
+    expect((me.user ?? me).preferences).toMatchObject({ leaders: true });
+  });
+
   it('pide al menos 2 personas', async () => {
     const people = (await app.inject({ method: 'GET', url: '/api/people', headers: auth() })).json();
     const res = await app.inject({

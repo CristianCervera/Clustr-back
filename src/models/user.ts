@@ -13,6 +13,8 @@ const preferencesSchema = new Schema(
     balanceAge: { type: Boolean, default: false },
     mixMarital: { type: Boolean, default: true },
     spreadOccasional: { type: Boolean, default: true },
+    /** Al crear, el primero de cada grupo (o su matrimonio) queda como cabeza. */
+    leaders: { type: Boolean, default: false },
   },
   { _id: false },
 );
