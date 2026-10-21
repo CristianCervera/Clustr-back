@@ -302,6 +302,33 @@ describe('grupos', () => {
     expect((me.user ?? me).preferences).toMatchObject({ leaders: true });
   });
 
+  it('reparte entre los responsables elegidos a mano', async () => {
+    const people: { id: string; firstName: string }[] = (await app.inject({ method: 'GET', url: '/api/people', headers: auth() })).json();
+    const id = (name: string) => people.find((p) => p.firstName === name)!.id;
+    const preferences = { mode: 'count', value: 5, couples: 'together', balanceGender: true, balanceAge: false, mixMarital: true, spreadOccasional: true, leaders: false };
+    const generate = (headIds: string[], couples = 'together') =>
+      app.inject({ method: 'POST', url: '/api/groups/generate', headers: auth(), payload: { preferences: { ...preferences, couples }, headIds } });
+    const names = (g: { firstName: string }[]) => g.map((p) => p.firstName);
+
+    // Dos responsables: dos grupos (el «value» de los criterios no cuenta), cada uno con su responsable delante.
+    const two = (await generate([id('Luis'), id('Pedro')])).json().groups as { firstName: string }[][];
+    expect(two).toHaveLength(2);
+    expect(two.map((g) => g[0]!.firstName).sort()).toEqual(['Luis', 'Pedro']);
+    // Con «juntos», el cónyuge de cada responsable va con él.
+    expect(names(two.find((g) => g[0]!.firstName === 'Luis')!)).toContain('Lucía');
+    expect(two.flat()).toHaveLength(6);
+
+    // Un matrimonio elegido encabeza un solo grupo, también con «separados».
+    const together = (await generate([id('Luis'), id('Lucía'), id('Pedro')])).json().groups as { firstName: string }[][];
+    expect(together).toHaveLength(2);
+    expect(names(together.find((g) => names(g).includes('Luis'))!).slice(0, 2).sort()).toEqual(['Lucía', 'Luis']);
+    expect((await generate([id('Luis'), id('Lucía'), id('Pedro')], 'apart')).json().groups).toHaveLength(2);
+
+    // Hacen falta dos grupos de responsables y alguien a quien repartir.
+    expect((await generate([id('Luis'), id('Lucía')])).json()).toMatchObject({ error: 'NOT_ENOUGH_HEADS' });
+    expect((await generate(people.map((p) => p.id), 'apart')).json()).toMatchObject({ error: 'NOT_ENOUGH_PEOPLE' });
+  });
+
   it('pide al menos 2 personas', async () => {
     const people = (await app.inject({ method: 'GET', url: '/api/people', headers: auth() })).json();
     const res = await app.inject({

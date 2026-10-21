@@ -272,5 +272,24 @@ export function groupsWithHeads(people: GroupingPerson[], headUnits: string[][],
     });
   }
 
+  // Los grupos con dos cabezas (un matrimonio) ya tienen uno más: se igualan los tamaños moviendo a
+  // alguien sin pareja en su grupo del más lleno al más vacío, mejor del mismo sexo que lo que falta allí.
+  const size = (g: number) => groups[g]!.length + units[unitOf[g]!]!.length;
+  for (let guard = 0; guard < people.length; guard++) {
+    const order = groups.map((_, g) => g).sort((a, b) => size(a) - size(b));
+    const small = order[0]!;
+    const big = order[order.length - 1]!;
+    if (size(big) - size(small) <= 1) break;
+    const candidates = groups[big]!.filter((id) => {
+      const p = byId.get(id)!;
+      const pairedHere = p.spouseId && (groups[big]!.includes(p.spouseId) || units[unitOf[big]!]!.includes(p.spouseId));
+      return !(prefs.couples === 'together' && pairedHere) && !(prefs.couples === 'apart' && p.spouseId && (groups[small]!.includes(p.spouseId) || units[unitOf[small]!]!.includes(p.spouseId)));
+    });
+    if (!candidates.length) break;
+    const id = candidates[Math.floor(rng() * candidates.length)]!;
+    groups[big]!.splice(groups[big]!.indexOf(id), 1);
+    groups[small]!.push(id);
+  }
+
   return groups.map((g, i) => [...units[unitOf[i]!]!, ...g]);
 }

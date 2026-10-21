@@ -1,5 +1,12 @@
 # Novedades
 
+## 0.8.0
+
+- **Responsables elegidos a mano.** `POST /groups/generate` acepta `headIds`: sale un grupo por responsable y el resto se
+  reparte entre ellos con los criterios. Un matrimonio elegido encabeza siempre un mismo grupo.
+- **Tamaños iguales con cabezas.** Al repartir por cabezas, los grupos con un matrimonio al frente ya no salen con una
+  persona de más: el reparto cuenta a los cabezas al igualar tamaños.
+
 ## 0.7.0
 
 - **Corrige: «Un responsable en cada grupo» no se recordaba.** La preferencia `leaders` no estaba en el esquema de las

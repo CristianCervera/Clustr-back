@@ -129,6 +129,15 @@ describe('groupsWithHeads', () => {
     expect(groups).toHaveLength(4);
     expect(groups.flat()).toHaveLength(5);
   });
+  it('cuenta a los cabezas al igualar los tamaños: un grupo con un matrimonio al frente no sale más grande', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const groups = groupsWithHeads(sampleCrowd(), [['h0', 'w0'], ['s0'], ['s1']], prefs(), seededRandom(seed));
+      expect(sizes(groups)).toEqual([8, 8, 8]);
+      // Los matrimonios del resto siguen juntos.
+      for (const i of [1, 2, 3, 4, 5]) expect(groups.find((g) => g.includes(`h${i}`))).toContain(`w${i}`);
+    }
+  });
+
   it('un matrimonio cabeza encabeza un único grupo, los dos al frente', () => {
     const groups = groupsWithHeads(sampleCrowd(), [['h0', 'w0'], ['s0'], ['s1']], prefs(), seededRandom(7));
     expect(groups).toHaveLength(3);

@@ -12,6 +12,8 @@ const Generate = z.object({
   preferences: GroupPreferences,
   /** Personas a repartir. Sin ella, todas las marcadas como activas. */
   personIds: z.array(objectId).max(5000).optional(),
+  /** Responsables elegidos a mano: uno por grupo (o un matrimonio); el resto se reparte entre ellos. */
+  headIds: z.array(objectId).max(500).optional(),
 });
 
 /** Nombre de cada grupo, en orden; vacío para «Grupo N». */
@@ -81,22 +83,41 @@ export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
   /** Calcula un reparto sin guardarlo. Guarda los criterios como preferencias de la cuenta. */
   app.post('/groups/generate', { schema: { body: Generate } }, async (request) => {
     const owner = request.viewerId;
-    const { preferences, personIds } = request.body;
-    const people = await Person.find(personIds ? { owner, _id: { $in: personIds } } : { owner, active: true });
+    const { preferences, personIds, headIds } = request.body;
+    // Los responsables cuentan aunque no estén entre los participantes marcados.
+    const filter = personIds ? { _id: { $in: [...personIds, ...(headIds ?? [])] } } : { $or: [{ active: true }, { _id: { $in: headIds ?? [] } }] };
+    const people = await Person.find({ owner, ...filter });
     if (people.length < 2) throw badRequest('Necesitas al menos 2 personas para hacer grupos.', 'NOT_ENOUGH_PEOPLE');
     await User.updateOne({ _id: owner }, { preferences });
 
-    const ids = makeGroups(
-      people.map((p) => ({
-        id: p.id,
-        gender: p.gender as Gender | null,
-        age: p.age,
-        married: p.married,
-        occasional: p.occasional,
-        spouseId: p.spouse?.toString() ?? null,
-      })),
-      preferences,
-    );
+    const grouping = people.map((p) => ({
+      id: p.id,
+      gender: p.gender as Gender | null,
+      age: p.age,
+      married: p.married,
+      occasional: p.occasional,
+      spouseId: p.spouse?.toString() ?? null,
+    }));
+    let ids: string[][];
+    if (headIds?.length) {
+      const heads = [...new Set(headIds)].filter((id) => grouping.some((p) => p.id === id));
+      // Un matrimonio elegido encabeza siempre un mismo grupo, sea cual sea el criterio de matrimonios.
+      const units: string[][] = [];
+      const placed = new Set<string>();
+      for (const id of heads) {
+        if (placed.has(id)) continue;
+        placed.add(id);
+        const spouse = grouping.find((p) => p.id === id)?.spouseId;
+        const pair = spouse && heads.includes(spouse) && !placed.has(spouse) ? spouse : null;
+        if (pair) placed.add(pair);
+        units.push(pair ? [id, pair] : [id]);
+      }
+      if (units.length < 2) throw badRequest('Elige al menos 2 responsables (o dos grupos de responsables).', 'NOT_ENOUGH_HEADS');
+      if (grouping.length === heads.length) throw badRequest('No queda nadie para repartir entre los responsables.', 'NOT_ENOUGH_PEOPLE');
+      ids = groupsWithHeads(grouping, units, { ...preferences, mode: 'count', value: units.length });
+    } else {
+      ids = makeGroups(grouping, preferences);
+    }
     const byId = new Map(people.map((p) => [p.id, personDto(p)]));
     return { groups: ids.map((group) => group.map((id) => byId.get(id)!)) };
   });
