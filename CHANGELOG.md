@@ -1,5 +1,14 @@
 # Novedades
 
+## 0.6.0
+
+- **Responsables al crear.** `POST /group-sets` acepta `heads`, las personas que encabezan su grupo; la preferencia
+  `leaders` recuerda si se quieren.
+- **Repartir por cabezas pregunta por los matrimonios.** `POST /group-sets/:id/heads` acepta `couples` (`together` o
+  `apart`). Con `together`, un matrimonio del grupo elegido encabeza junto un mismo grupo.
+- **Volver a mezclar** trata a los cabezas de un mismo grupo como una sola unidad: un matrimonio responsable sigue
+  encabezando el mismo grupo.
+
 ## 0.5.0
 
 - **Repartir por cabezas.** `POST /group-sets/:id/heads` (`{ group, name }`) crea un reparto nuevo en el que cada

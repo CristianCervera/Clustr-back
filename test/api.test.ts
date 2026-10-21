@@ -212,7 +212,7 @@ describe('grupos', () => {
     expect(set.preferences).toMatchObject({ mode: 'count', value: 2 });
     // El cabeza va el primero y marcado; con «juntos», su cónyuge va con él.
     const groupOf = (name: string) => set.groups.find((g: { firstName: string }[]) => g.some((m) => m.firstName === name));
-    for (const [head, spouse] of [['Luis', 'Lucía'], ['Pedro', 'Sara']]) {
+    for (const [head, spouse] of [['Luis', 'Lucía'], ['Pedro', 'Sara']] as const) {
       expect(groupOf(head)[0]).toMatchObject({ firstName: head, head: true });
       expect(groupOf(head).some((m: { firstName: string }) => m.firstName === spouse)).toBe(true);
     }
@@ -232,6 +232,27 @@ describe('grupos', () => {
       expect(remix.json().groupNames[i]).toBe(`Con ${g[0]!.firstName}`);
     });
 
+    // Preguntando: «separados» deja a cada cabeza en su grupo; «juntos» hace que un matrimonio cabeza encabece uno solo.
+    const couple = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/group-sets',
+        headers: auth(),
+        payload: { name: 'Pareja', preferences: { mode: 'count', value: 2 }, groups: [[id('Luis'), id('Lucía'), id('Pedro')], people.filter((p) => !['Luis', 'Lucía', 'Pedro'].includes(p.firstName)).map((p) => p.id)] },
+      })
+    ).json();
+    const apart = (await app.inject({ method: 'POST', url: `/api/group-sets/${couple.id}/heads`, headers: auth(), payload: { group: 0, name: 'S', couples: 'apart' } })).json();
+    expect(apart.groups).toHaveLength(3);
+    expect(apart.preferences.couples).toBe('apart');
+    const together = (await app.inject({ method: 'POST', url: `/api/group-sets/${couple.id}/heads`, headers: auth(), payload: { group: 0, name: 'J', couples: 'together' } })).json();
+    expect(together.groups).toHaveLength(2);
+    const lead = together.groups.find((g: { firstName: string }[]) => g.some((m) => m.firstName === 'Luis'));
+    expect(lead.slice(0, 2).map((m: { firstName: string; head: boolean }) => [m.firstName, m.head]).sort()).toEqual([['Lucía', true], ['Luis', true]]);
+    // Pedro encabeza el otro; Sara, su mujer, va con él.
+    const pedro = together.groups.find((g: { firstName: string }[]) => g[0]!.firstName === 'Pedro');
+    expect(pedro.some((m: { firstName: string }) => m.firstName === 'Sara')).toBe(true);
+    for (const s of [couple.id, apart.id, together.id]) await app.inject({ method: 'DELETE', url: `/api/group-sets/${s}`, headers: auth() });
+
     // Un grupo de una persona no sirve, y un reparto sin cabezas no se puede volver a mezclar.
     const lonely = await app.inject({ method: 'PATCH', url: `/api/group-sets/${source.id}`, headers: auth(), payload: { layout: [[0], [1, 2, 3, 4, 5]] } });
     expect(lonely.statusCode).toBe(200);
@@ -240,6 +261,38 @@ describe('grupos', () => {
     expect((await app.inject({ method: 'POST', url: `/api/group-sets/${source.id}/remix`, headers: auth() })).statusCode).toBe(400);
 
     for (const s of [source.id, set.id]) await app.inject({ method: 'DELETE', url: `/api/group-sets/${s}`, headers: auth() });
+  });
+
+  it('guarda responsables al crear y un matrimonio responsable sigue encabezando junto', async () => {
+    const people: { id: string; firstName: string }[] = (await app.inject({ method: 'GET', url: '/api/people', headers: auth() })).json();
+    const id = (name: string) => people.find((p) => p.firstName === name)!.id;
+    const save = await app.inject({
+      method: 'POST',
+      url: '/api/group-sets',
+      headers: auth(),
+      payload: {
+        name: 'Con responsables',
+        preferences: { mode: 'count', value: 2, leaders: true },
+        groups: [
+          [id('Luis'), id('Lucía'), id('Marta')],
+          [id('Pedro'), id('Sara'), id('Tomás')],
+        ],
+        heads: [id('Luis'), id('Lucía'), id('Pedro')],
+      },
+    });
+    expect(save.statusCode).toBe(201);
+    const set = save.json();
+    expect(set.preferences.leaders).toBe(true);
+    expect(set.groups.flat().filter((m: { head: boolean }) => m.head).map((m: { firstName: string }) => m.firstName).sort()).toEqual(['Lucía', 'Luis', 'Pedro']);
+
+    // Volver a mezclar: siguen siendo 2 grupos, y Luis y Lucía encabezan el mismo.
+    const remix = (await app.inject({ method: 'POST', url: `/api/group-sets/${set.id}/remix`, headers: auth() })).json();
+    expect(remix.groups).toHaveLength(2);
+    const theirs = remix.groups.find((g: { firstName: string }[]) => g.some((m) => m.firstName === 'Luis'));
+    expect(theirs.slice(0, 2).map((m: { firstName: string }) => m.firstName).sort()).toEqual(['Lucía', 'Luis']);
+    expect(remix.groups.flat()).toHaveLength(6);
+
+    await app.inject({ method: 'DELETE', url: `/api/group-sets/${set.id}`, headers: auth() });
   });
 
   it('pide al menos 2 personas', async () => {

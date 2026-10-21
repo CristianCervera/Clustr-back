@@ -17,6 +17,8 @@ export const GroupPreferences = z.object({
   mixMarital: z.boolean().default(true),
   /** Repartir a los ocasionales (quienes no suelen venir) para que ningún grupo dependa de ellos. */
   spreadOccasional: z.boolean().default(true),
+  /** Al crear, el primero de cada grupo (o su matrimonio) queda como cabeza del grupo. */
+  leaders: z.boolean().default(false),
 });
 export type GroupPreferences = z.infer<typeof GroupPreferences>;
 
@@ -196,15 +198,16 @@ export function makeGroups(people: GroupingPerson[], prefs: GroupPreferences, rn
 }
 
 /**
- * Reparto «por cabezas»: cada cabeza encabeza un grupo y el resto se reparte entre esos grupos con
- * los criterios de siempre. Con «matrimonios juntos», el cónyuge de un cabeza va a su grupo; con
- * «separados», a otro. Devuelve los ids de cada grupo con el cabeza en primer lugar.
+ * Reparto «por cabezas»: cada unidad de cabezas (una persona, o un matrimonio que encabeza junto)
+ * va al frente de un grupo y el resto se reparte entre esos grupos con los criterios de siempre.
+ * Con «matrimonios juntos», el cónyuge de un cabeza va a su grupo; con «separados», a otro.
+ * Devuelve los ids de cada grupo con sus cabezas en primer lugar.
  */
-export function groupsWithHeads(people: GroupingPerson[], headIds: string[], prefs: GroupPreferences, rng: () => number = Math.random): string[][] {
-  const heads = shuffle(headIds, rng);
-  const isHead = new Set(heads);
+export function groupsWithHeads(people: GroupingPerson[], headUnits: string[][], prefs: GroupPreferences, rng: () => number = Math.random): string[][] {
+  const units = shuffle(headUnits, rng);
+  const isHead = new Set(units.flat());
   const byId = new Map(people.map((p) => [p.id, p]));
-  const k = heads.length;
+  const k = units.length;
   const groups = makeGroups(
     people.filter((p) => !isHead.has(p.id)),
     { ...prefs, mode: 'count', value: k },
@@ -212,30 +215,33 @@ export function groupsWithHeads(people: GroupingPerson[], headIds: string[], pre
   );
   while (groups.length < k) groups.push([]);
 
-  // Cónyuge de un cabeza que está entre el resto (si es otro cabeza, ya van en grupos distintos).
-  const spouseOf = (head: string) => {
-    const spouse = byId.get(head)?.spouseId;
-    return spouse && byId.has(spouse) && !isHead.has(spouse) ? spouse : null;
+  // Cónyuge de un cabeza que está entre el resto (si también es cabeza, ya está colocado).
+  const spouseOf = (unit: number) => {
+    for (const head of units[unit]!) {
+      const spouse = byId.get(head)?.spouseId;
+      if (spouse && byId.has(spouse) && !isHead.has(spouse)) return spouse;
+    }
+    return null;
   };
-  const wants = (head: string, g: number) => {
-    const spouse = spouseOf(head);
+  const wants = (unit: number, g: number) => {
+    const spouse = spouseOf(unit);
     if (!spouse || prefs.couples === 'any') return true;
     return groups[g]!.includes(spouse) === (prefs.couples === 'together');
   };
 
   // Primero los cabezas con cónyuge entre el resto, cada uno al grupo libre que encaja con los criterios.
-  const headOf: (string | undefined)[] = Array.from({ length: k }, () => undefined);
-  const ordered = [...heads.filter((h) => spouseOf(h)), ...heads.filter((h) => !spouseOf(h))];
-  for (const head of ordered) {
-    const free = headOf.map((h, g) => (h === undefined ? g : -1)).filter((g) => g >= 0);
-    headOf[free.find((g) => wants(head, g)) ?? free[0]!] = head;
+  const unitOf: (number | undefined)[] = Array.from({ length: k }, () => undefined);
+  const all = units.map((_, u) => u);
+  for (const unit of [...all.filter((u) => spouseOf(u)), ...all.filter((u) => !spouseOf(u))]) {
+    const free = unitOf.map((u, g) => (u === undefined ? g : -1)).filter((g) => g >= 0);
+    unitOf[free.find((g) => wants(unit, g)) ?? free[0]!] = unit;
   }
 
   // Si no ha encajado (dos cónyuges en el mismo grupo…), se cambia al cónyuge por alguien parecido.
   if (prefs.couples !== 'any') {
-    headOf.forEach((head, b) => {
-      const spouseId = head && spouseOf(head);
-      if (!spouseId || wants(head, b)) return;
+    unitOf.forEach((unit, b) => {
+      const spouseId = unit !== undefined ? spouseOf(unit) : null;
+      if (!spouseId || wants(unit!, b)) return;
       const spouse = byId.get(spouseId)!;
       const a = prefs.couples === 'together' ? groups.findIndex((g) => g.includes(spouseId)) : b;
       const targets = prefs.couples === 'together' ? [b] : groups.map((_, g) => g).filter((g) => g !== b);
@@ -244,7 +250,7 @@ export function groupsWithHeads(people: GroupingPerson[], headIds: string[], pre
       // Candidato: no es cónyuge de ningún cabeza ni tiene pareja en su grupo; mejor si es del mismo sexo.
       const movable = (id: string, g: number) => {
         const p = byId.get(id)!;
-        return !headOf.some((h) => h && spouseOf(h) === id) && !(p.spouseId && groups[g]!.includes(p.spouseId));
+        return !all.some((u) => spouseOf(u) === id) && !(p.spouseId && groups[g]!.includes(p.spouseId));
       };
       let best: { g: number; id: string; score: number } | null = null;
       for (const g of targets) {
@@ -266,5 +272,5 @@ export function groupsWithHeads(people: GroupingPerson[], headIds: string[], pre
     });
   }
 
-  return groups.map((g, i) => [headOf[i]!, ...g]);
+  return groups.map((g, i) => [...units[unitOf[i]!]!, ...g]);
 }
