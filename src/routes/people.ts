@@ -65,6 +65,12 @@ async function linkSpouses(owner: string, id: string, spouseId: string | null) {
   await Person.updateOne({ _id: spouseId, owner }, { spouse: id, married: true });
 }
 
+/** Un matrimonio comparte la asistencia: el cónyuge pasa a ser ocasional (o habitual) como `id`. */
+async function shareAttendance(owner: string, id: string) {
+  const person = await Person.findOne({ _id: id, owner });
+  if (person?.spouse) await Person.updateOne({ _id: person.spouse, owner }, { occasional: person.occasional });
+}
+
 export const peopleRoutes: FastifyPluginAsyncZod = async (app) => {
   app.addHook('preHandler', app.authenticate);
 
@@ -78,6 +84,7 @@ export const peopleRoutes: FastifyPluginAsyncZod = async (app) => {
     const { spouseId, ...data } = request.body;
     const person = await Person.create({ ...data, owner });
     if (spouseId) await linkSpouses(owner, person.id, spouseId);
+    if (spouseId && data.occasional) await shareAttendance(owner, person.id);
     // Devuelve también al cónyuge, que ha cambiado.
     const changed = await Person.find({ owner, _id: { $in: [person._id, ...(spouseId ? [spouseId] : [])] } });
     return reply.code(201).send({ person: personDto(changed.find((p) => p.id === person.id)!), changed: changed.map(personDto) });
@@ -94,6 +101,10 @@ export const peopleRoutes: FastifyPluginAsyncZod = async (app) => {
     // Si deja de estar casada, se rompe el vínculo con su cónyuge.
     const nextSpouse = data.married === false ? null : spouseId;
     if (nextSpouse !== undefined) await linkSpouses(owner, id, nextSpouse);
+    // Al marcarla (o desmarcarla) como ocasional, o al casarla siendo ocasional, su cónyuge la sigue.
+    const occasional = data.occasional ?? before.occasional;
+    const newSpouse = Boolean(nextSpouse) && nextSpouse !== before.spouse?.toString();
+    if (occasional !== before.occasional || (newSpouse && occasional)) await shareAttendance(owner, id);
 
     const ids = [id, before.spouse?.toString(), nextSpouse].filter((x): x is string => Boolean(x));
     const changed = await Person.find({ owner, _id: { $in: ids } });
@@ -166,6 +177,7 @@ export const peopleRoutes: FastifyPluginAsyncZod = async (app) => {
         addedSpouses.push(row.spouseName);
       }
       await linkSpouses(owner, person.id, spouse.id);
+      if (person.occasional || spouse.occasional) await Person.updateMany({ owner, _id: { $in: [person._id, spouse._id] } }, { occasional: true });
       done.add(person.id).add(spouse.id);
       linked++;
     }

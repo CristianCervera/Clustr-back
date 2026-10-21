@@ -81,6 +81,15 @@ describe('personas', () => {
     expect(person).toMatchObject({ married: true, spouseId: juanId });
     expect(changed.find((p: { id: string }) => p.id === juanId)).toMatchObject({ married: true, spouseId: person.id });
 
+    // Marcar a uno como ocasional marca también a su cónyuge, y desmarcarlo lo desmarca.
+    // Como lo envía la ficha: todos los campos, con el mismo cónyuge.
+    const juanNow = changed.find((p: { id: string }) => p.id === juanId);
+    const { id: _id, ...juanForm } = { ...juanNow, occasional: true };
+    const occ = await app.inject({ method: 'PATCH', url: `/api/people/${juanId}`, headers: auth(), payload: juanForm });
+    expect(occ.json().changed.find((p: { id: string }) => p.id === person.id).occasional).toBe(true);
+    const reg = await app.inject({ method: 'PATCH', url: `/api/people/${person.id}`, headers: auth(), payload: { occasional: false } });
+    expect(reg.json().changed.find((p: { id: string }) => p.id === juanId).occasional).toBe(false);
+
     // Al dejar de estar casada se rompe el vínculo en los dos.
     const single = await app.inject({ method: 'PATCH', url: `/api/people/${person.id}`, headers: auth(), payload: { married: false } });
     expect(single.json().changed.find((p: { id: string }) => p.id === juanId).spouseId).toBeNull();
@@ -112,6 +121,8 @@ describe('personas', () => {
     expect(byName('Luis').spouseId).toBe(byName('Lucía').id);
     expect(byName('Pedro').spouseId).toBe(byName('Sara').id);
     expect(byName('Sara')).toMatchObject({ married: true, occasional: true, spouseId: byName('Pedro').id });
+    // Un matrimonio comparte la asistencia.
+    expect(byName('Pedro').occasional).toBe(true);
     expect(byName('Luis').occasional).toBe(false);
     expect(byName('Marta')).toMatchObject({ lastName: 'Gil Soto', married: true, spouseId: byName('Tomás').id });
   });
@@ -148,8 +159,8 @@ describe('grupos', () => {
     expect(list.json()).toHaveLength(1);
 
     const stats = await app.inject({ method: 'GET', url: '/api/auth/me/stats', headers: auth() });
-    // 6 casados forman 3 matrimonios.
-    expect(stats.json()).toMatchObject({ people: 6, married: 6, couples: 3, occasional: 1, groupSets: 1 });
+    // 6 casados forman 3 matrimonios; Sara y Pedro, ocasionales.
+    expect(stats.json()).toMatchObject({ people: 6, married: 6, couples: 3, occasional: 2, groupSets: 1 });
 
     expect((await app.inject({ method: 'DELETE', url: `/api/group-sets/${set.id}`, headers: auth() })).statusCode).toBe(204);
   });
@@ -164,7 +175,35 @@ describe('grupos', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+});
 
+// Después de los grupos: reemplaza la lista que usan los tests anteriores.
+describe('importación de matrimonios en una fila', () => {
+  it('vincula a cada matrimonio escrito en una fila con su pareja aunque se repitan los nombres', async () => {
+    // Así llegan del cliente «Jorge y María» y «Pedro y María» sin apellidos.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/people/import',
+      headers: auth(),
+      payload: {
+        replace: true,
+        people: [
+          { firstName: 'Jorge', married: true, spouseName: 'María' },
+          { firstName: 'María', married: true, spouseName: 'Jorge' },
+          { firstName: 'Pedro', married: true, spouseName: 'María' },
+          { firstName: 'María', married: true, spouseName: 'Pedro' },
+        ],
+      },
+    });
+    expect(res.json()).toMatchObject({ created: 4, couples: 2, addedSpouses: [] });
+    const people: { id: string; firstName: string; spouseId: string | null }[] = res.json().people;
+    const [jorge, pedro] = ['Jorge', 'Pedro'].map((n) => people.find((p) => p.firstName === n)!);
+    expect(jorge!.spouseId).not.toBe(pedro!.spouseId);
+    for (const p of [jorge!, pedro!]) expect(people.find((x) => x.id === p.spouseId)).toMatchObject({ firstName: 'María', spouseId: p.id });
+  });
+});
+
+describe('cuenta', () => {
   it('borrar la cuenta borra sus datos', async () => {
     expect((await app.inject({ method: 'DELETE', url: '/api/auth/me', headers: auth() })).statusCode).toBe(204);
     expect((await app.inject({ method: 'GET', url: '/api/auth/me', headers: auth() })).statusCode).toBe(401);

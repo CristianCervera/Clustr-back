@@ -54,7 +54,7 @@ Todas cuelgan de `/api`. 🔒 = requiere `Authorization: Bearer <token>`.
 | DELETE 🔒 | `/auth/me` | Borra la cuenta con sus personas y repartos |
 | GET 🔒 | `/people` | Lista ordenada por nombre |
 | POST 🔒 | `/people` | Alta. `spouseId` vincula a los dos. Devuelve `{ person, changed }` |
-| PATCH 🔒 | `/people/:id` | Edición parcial. `married: false` o `spouseId: null` rompen el vínculo |
+| PATCH 🔒 | `/people/:id` | Edición parcial. `married: false` o `spouseId: null` rompen el vínculo. Si cambia `occasional`, el cónyuge pasa a tener el mismo |
 | DELETE 🔒 | `/people/:id` · `/people` | Borra una persona · todas |
 | POST 🔒 | `/people/active` | `{ ids, active }`: quién participa en los grupos |
 | POST 🔒 | `/people/import` | `{ people: [...], replace }`. Vincula siempre a los cónyuges por `spouseName`; si no existe, lo crea |
