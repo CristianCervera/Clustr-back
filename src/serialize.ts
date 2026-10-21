@@ -98,13 +98,14 @@ export interface MemberDto {
   married: boolean;
   occasional: boolean;
   spouseId: string | null;
+  head: boolean;
 }
 
 export function groupSetDto(set: {
   _id: Id;
   name: string;
   preferences?: unknown;
-  groups: { name?: string | null; members: { person?: Id | null; firstName: string; lastName?: string | null; gender?: string | null; age?: number | null; married?: boolean | null; occasional?: boolean | null; spouse?: Id | null }[] }[];
+  groups: { name?: string | null; members: { person?: Id | null; firstName: string; lastName?: string | null; gender?: string | null; age?: number | null; married?: boolean | null; occasional?: boolean | null; spouse?: Id | null; head?: boolean | null }[] }[];
   createdAt?: Date;
 }) {
   return {
@@ -125,6 +126,7 @@ export function groupSetDto(set: {
           married: Boolean(m.married),
           occasional: Boolean(m.occasional),
           spouseId: m.spouse ? m.spouse.toString() : null,
+          head: Boolean(m.head),
         }),
       ),
     ),

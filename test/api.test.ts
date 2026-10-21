@@ -190,6 +190,58 @@ describe('grupos', () => {
     expect((await app.inject({ method: 'DELETE', url: `/api/group-sets/${set.id}`, headers: auth() })).statusCode).toBe(204);
   });
 
+  it('reparte por cabezas en un reparto nuevo y vuelve a mezclar conservando a los cabezas', async () => {
+    const people: { id: string; firstName: string }[] = (await app.inject({ method: 'GET', url: '/api/people', headers: auth() })).json();
+    const id = (name: string) => people.find((p) => p.firstName === name)!.id;
+    const rest = people.filter((p) => !['Luis', 'Pedro'].includes(p.firstName)).map((p) => p.id);
+    const source = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/group-sets',
+        headers: auth(),
+        payload: { name: 'Base', preferences: { mode: 'count', value: 2, couples: 'together' }, groups: [[id('Luis'), id('Pedro')], rest], groupNames: ['Cabezas', ''] },
+      })
+    ).json();
+
+    const res = await app.inject({ method: 'POST', url: `/api/group-sets/${source.id}/heads`, headers: auth(), payload: { group: 0, name: 'Base · por cabezas' } });
+    expect(res.statusCode).toBe(201);
+    const set = res.json();
+    expect(set.id).not.toBe(source.id);
+    expect(set.groups).toHaveLength(2);
+    expect(set.groups.flat()).toHaveLength(6);
+    expect(set.preferences).toMatchObject({ mode: 'count', value: 2 });
+    // El cabeza va el primero y marcado; con «juntos», su cónyuge va con él.
+    const groupOf = (name: string) => set.groups.find((g: { firstName: string }[]) => g.some((m) => m.firstName === name));
+    for (const [head, spouse] of [['Luis', 'Lucía'], ['Pedro', 'Sara']]) {
+      expect(groupOf(head)[0]).toMatchObject({ firstName: head, head: true });
+      expect(groupOf(head).some((m: { firstName: string }) => m.firstName === spouse)).toBe(true);
+    }
+    expect(set.groups.flat().filter((m: { head: boolean }) => m.head)).toHaveLength(2);
+
+    // El original no cambia.
+    const original = (await app.inject({ method: 'GET', url: `/api/group-sets/${source.id}`, headers: auth() })).json();
+    expect(original.groups.map((g: unknown[]) => g.length)).toEqual([2, 4]);
+
+    // Volver a mezclar: los mismos cabezas, y el nombre de cada grupo sigue a su cabeza.
+    const named = await app.inject({ method: 'PATCH', url: `/api/group-sets/${set.id}`, headers: auth(), payload: { groupNames: set.groups.map((g: { firstName: string }[]) => `Con ${g[0]!.firstName}`) } });
+    expect(named.statusCode).toBe(200);
+    const remix = await app.inject({ method: 'POST', url: `/api/group-sets/${set.id}/remix`, headers: auth() });
+    expect(remix.statusCode).toBe(200);
+    remix.json().groups.forEach((g: { firstName: string; head: boolean }[], i: number) => {
+      expect(g[0]!.head).toBe(true);
+      expect(remix.json().groupNames[i]).toBe(`Con ${g[0]!.firstName}`);
+    });
+
+    // Un grupo de una persona no sirve, y un reparto sin cabezas no se puede volver a mezclar.
+    const lonely = await app.inject({ method: 'PATCH', url: `/api/group-sets/${source.id}`, headers: auth(), payload: { layout: [[0], [1, 2, 3, 4, 5]] } });
+    expect(lonely.statusCode).toBe(200);
+    const tooSmall = await app.inject({ method: 'POST', url: `/api/group-sets/${source.id}/heads`, headers: auth(), payload: { group: 0, name: 'X' } });
+    expect(tooSmall.json()).toMatchObject({ error: 'NOT_ENOUGH_HEADS' });
+    expect((await app.inject({ method: 'POST', url: `/api/group-sets/${source.id}/remix`, headers: auth() })).statusCode).toBe(400);
+
+    for (const s of [source.id, set.id]) await app.inject({ method: 'DELETE', url: `/api/group-sets/${s}`, headers: auth() });
+  });
+
   it('pide al menos 2 personas', async () => {
     const people = (await app.inject({ method: 'GET', url: '/api/people', headers: auth() })).json();
     const res = await app.inject({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PREFERENCES, makeGroups, seededRandom, type GroupingPerson, type GroupPreferences } from '../src/grouping.js';
+import { DEFAULT_PREFERENCES, groupsWithHeads, makeGroups, seededRandom, type GroupingPerson, type GroupPreferences } from '../src/grouping.js';
 
 /** 12 solteros (6 y 6) y 6 matrimonios: 24 personas. */
 function sampleCrowd(): GroupingPerson[] {
@@ -87,5 +87,46 @@ describe('makeGroups', () => {
       { id: 'b', married: false },
     ];
     expect(sizes(makeGroups(people, prefs({ value: 2 }), seededRandom(9)))).toEqual([1, 1]);
+  });
+});
+
+describe('groupsWithHeads', () => {
+  const heads = ['s0', 's1', 's2', 's3'];
+
+  it('pone a cada cabeza al frente de un grupo y reparte al resto entre ellos', () => {
+    const people = sampleCrowd();
+    const groups = groupsWithHeads(people, heads, prefs(), seededRandom(4));
+    expect(groups).toHaveLength(4);
+    expect(groups.map((g) => g[0]).sort()).toEqual([...heads].sort());
+    expect(groups.flat()).toHaveLength(people.length);
+    expect(new Set(groups.flat()).size).toBe(people.length);
+    expect(sizes(groups)).toEqual([6, 6, 6, 6]);
+  });
+
+  it('con «matrimonios juntos», el cónyuge de un cabeza va a su grupo', () => {
+    // Dos cabezas casados con gente del resto; el resto mantiene a sus matrimonios juntos.
+    for (let seed = 1; seed <= 20; seed++) {
+      const groups = groupsWithHeads(sampleCrowd(), ['h0', 'h1', 's0', 's1'], prefs({ couples: 'together' }), seededRandom(seed));
+      const of = (id: string) => groups.find((g) => g.includes(id))!;
+      expect(of('w0')[0]).toBe('h0');
+      expect(of('w1')[0]).toBe('h1');
+      expect(of('h2')).toContain('w2');
+      expect(groups.flat()).toHaveLength(24);
+    }
+  });
+
+  it('con «matrimonios separados», el cónyuge de un cabeza va a otro grupo', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const groups = groupsWithHeads(sampleCrowd(), ['h0', 'h1', 's0', 's1'], prefs({ couples: 'apart' }), seededRandom(seed));
+      expect(groups.find((g) => g[0] === 'h0')).not.toContain('w0');
+      expect(groups.find((g) => g[0] === 'h1')).not.toContain('w1');
+    }
+  });
+
+  it('si quedan menos personas que cabezas, algún cabeza va solo', () => {
+    const people = sampleCrowd().slice(0, 5);
+    const groups = groupsWithHeads(people, ['s0', 's1', 's2', 's3'], prefs(), seededRandom(1));
+    expect(groups).toHaveLength(4);
+    expect(groups.flat()).toHaveLength(5);
   });
 });

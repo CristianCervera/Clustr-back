@@ -11,6 +11,8 @@ const memberSchema = new Schema(
     married: { type: Boolean, default: false },
     occasional: { type: Boolean, default: false },
     spouse: { type: Schema.Types.ObjectId, default: null },
+    /** Encabeza su grupo (reparto «por cabezas»). */
+    head: { type: Boolean, default: false },
   },
   { _id: false },
 );

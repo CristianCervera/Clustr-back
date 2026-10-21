@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { GroupPreferences, makeGroups, type Gender } from '../grouping.js';
-import { GroupSet } from '../models/group-set.js';
+import { DEFAULT_PREFERENCES, GroupPreferences, groupsWithHeads, makeGroups, type Gender } from '../grouping.js';
+import { GroupSet, type GroupSetDoc } from '../models/group-set.js';
 import { Person } from '../models/person.js';
 import { User } from '../models/user.js';
 import { badRequest, notFound } from '../http-errors.js';
@@ -37,6 +37,36 @@ const UpdateSet = z
     layout: z.array(z.array(z.number().int().min(0)).min(1)).min(1).max(500).optional(),
   })
   .refine((body) => body.name !== undefined || body.groupNames !== undefined || body.layout !== undefined, 'Nada que cambiar.');
+
+/** Reparto «por cabezas»: los miembros de un grupo encabezan cada uno un grupo nuevo con el resto. */
+const HeadsSet = z.object({
+  /** Posición del grupo cuyos miembros serán los cabezas. */
+  group: z.number().int().min(0),
+  name: z.string().trim().min(1, 'Ponle un nombre.').max(80),
+});
+
+type Snapshot = Record<string, unknown> & { person?: unknown; spouse?: unknown; gender?: string | null; age?: number | null; married?: boolean; occasional?: boolean };
+
+/** Los miembros del reparto, en orden, como copias sueltas. */
+const membersOf = (set: GroupSetDoc) => set.groups.flatMap((g) => g.members.map((m) => m.toObject() as Snapshot));
+
+/**
+ * Reparte a los miembros de un reparto con los cabezas dados (posiciones en `members`).
+ * Trabaja con la copia guardada, así que sirve aunque alguien se haya borrado de la lista.
+ */
+function headsLayout(members: Snapshot[], heads: number[], preferences: unknown): number[][] {
+  const indexOfPerson = new Map(members.flatMap((m, i) => (m.person ? [[String(m.person), String(i)] as const] : [])));
+  const people = members.map((m, i) => ({
+    id: String(i),
+    gender: (m.gender as Gender | null) ?? null,
+    age: m.age ?? null,
+    married: Boolean(m.married),
+    occasional: Boolean(m.occasional),
+    spouseId: m.spouse ? (indexOfPerson.get(String(m.spouse)) ?? null) : null,
+  }));
+  const prefs = GroupPreferences.parse({ ...DEFAULT_PREFERENCES, ...(preferences as object) });
+  return groupsWithHeads(people, heads.map(String), prefs).map((g) => g.map(Number));
+}
 
 export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
   app.addHook('preHandler', app.authenticate);
@@ -97,6 +127,53 @@ export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
       })),
     });
     return reply.code(201).send(groupSetDto(set));
+  });
+
+  /** Crea un reparto nuevo en el que cada miembro del grupo elegido encabeza un grupo con el resto. */
+  app.post('/group-sets/:id/heads', { schema: { params: IdParams, body: HeadsSet } }, async (request, reply) => {
+    const source = await GroupSet.findOne({ _id: request.params.id, owner: request.viewerId });
+    if (!source) throw notFound('El reparto');
+    const { group, name } = request.body;
+    const chosen = source.groups[group];
+    if (!chosen) throw badRequest('Ese grupo no existe.');
+    const members = membersOf(source);
+    const start = source.groups.slice(0, group).reduce((n, g) => n + g.members.length, 0);
+    const heads = chosen.members.map((_, i) => start + i);
+    if (heads.length < 2) throw badRequest('El grupo necesita al menos 2 personas para repartir por cabezas.', 'NOT_ENOUGH_HEADS');
+    if (members.length === heads.length) throw badRequest('No queda nadie fuera de ese grupo para repartir.', 'NOT_ENOUGH_PEOPLE');
+
+    const preferences = { ...DEFAULT_PREFERENCES, ...(source.preferences as object), mode: 'count', value: heads.length };
+    const layout = headsLayout(members, heads, preferences);
+    const set = await GroupSet.create({
+      owner: request.viewerId,
+      name,
+      preferences,
+      groups: layout.map((g) => ({ name: '', members: g.map((j, pos) => ({ ...members[j], head: pos === 0 })) })),
+    });
+    return reply.code(201).send(groupSetDto(set));
+  });
+
+  /** Vuelve a mezclar un reparto por cabezas: los cabezas se quedan y cada grupo conserva el nombre de su cabeza. */
+  app.post('/group-sets/:id/remix', { schema: { params: IdParams } }, async (request) => {
+    const set = await GroupSet.findOne({ _id: request.params.id, owner: request.viewerId });
+    if (!set) throw notFound('El reparto');
+    const members = membersOf(set);
+    const heads = members.flatMap((m, i) => (m.head ? [i] : []));
+    if (!heads.length) throw badRequest('Este reparto no tiene cabezas.', 'NO_HEADS');
+    if (members.length === heads.length) throw badRequest('No queda nadie para repartir.', 'NOT_ENOUGH_PEOPLE');
+
+    // El nombre de cada grupo sigue a su cabeza (al primero, si alguien juntó a dos).
+    const nameOfHead = new Map<number, string>();
+    let i = 0;
+    for (const g of set.groups) {
+      const head = g.members.findIndex((m) => m.head);
+      if (head >= 0) nameOfHead.set(i + head, g.name ?? '');
+      i += g.members.length;
+    }
+    const layout = headsLayout(members, heads, { ...(set.preferences as object), mode: 'count', value: heads.length });
+    set.set('groups', layout.map((g) => ({ name: nameOfHead.get(g[0]!) ?? '', members: g.map((j) => members[j]) })));
+    await set.save();
+    return groupSetDto(set);
   });
 
   app.patch('/group-sets/:id', { schema: { params: IdParams, body: UpdateSet } }, async (request) => {
